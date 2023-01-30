@@ -1,0 +1,11 @@
+name: MineParkCore
+author: MinePark Team
+version: 0.1.0-DEV
+api: 4.0.0
+main: minepark\plugin\MainPlugin
+
+permissions:
+  minepark.command.default:
+    default: true
+  minepark.command.setrank:
+    default: op

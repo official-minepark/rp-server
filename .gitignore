@@ -1,0 +1,64 @@
+Thumbs.db
+*.obj
+*.pdb
+*.log
+.vs
+.vscode
+
+/worlds/*
+/players/*
+/crashdumps/*
+/bin/php/*
+/core_data/mdc.yml
+/backups/*
+/plugin_data/BuilderTools/sessions/*
+
+plugin_list.yml
+server.lock
+server.properties
+banned-ips.txt
+banned-players.txt
+ops.txt
+white-list.txt
+
+#pocketmine API for development
+/plugins/pocketmine/*
+
+*_i.c
+*_p.c
+*_i.h
+*.ilk
+*.meta
+*.obj
+*.pch
+*.pdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*.log
+*.vspscc
+*.vssscc
+*.pidb
+*.svclog
+*.scc
+*.bak
+
+# =========================
+# Windows detritus
+# =========================
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/

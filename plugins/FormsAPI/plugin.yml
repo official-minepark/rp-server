@@ -1,0 +1,5 @@
+name: FormsAPI
+author: MinePark TEAM
+api: 4.0.0
+version: 1.0.0
+main: minepark\formsapi\plugin\FormsAPI
