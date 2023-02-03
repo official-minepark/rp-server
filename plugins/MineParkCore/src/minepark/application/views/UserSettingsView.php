@@ -53,7 +53,7 @@ class UserSettingsView extends BaseView
 
     private function sendChangeEmailForm(Player $player): \Generator
     {
-        $oldEmail = $this->userStatesMapStore->getForUser($player)->profile->email;
+        $oldEmail = $this->userStatesMapStore->getUser($player)->profile->email;
 
         $form = new CustomForm(
             title: "Смена почты",

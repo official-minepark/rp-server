@@ -32,16 +32,7 @@ class UserStatisticsService extends BaseService
 
         $statesMap->statistic = $response->getBody();
 
-        /**
-         * @var ClientResponse<CalculateUserLevelCommandResponse> $response
-         */
-        $response = yield from $this->userStatisticsDataService->calculateLevel($statesMap->statistic->experience);
-
-        $levelInfo = $response->getBody();
-
         yield from $this->userStatisticsDataService->updateJoinedDate($statesMap->profile->id);
-        $this->sendMessage($user, TextFormat::AQUA . "Вы находитесь на " . TextFormat::YELLOW . $levelInfo->level . TextFormat::AQUA . " уровне");
-        $this->sendMessage($user, TextFormat::AQUA . "Для перехода на следующий уровень Вы набрали " . TextFormat::YELLOW . $levelInfo->experience . TextFormat::AQUA . " из " . TextFormat::YELLOW . $levelInfo->maximalExperience . TextFormat::AQUA . " опыта");
     }
 
     public function onUserQuit(Player $user, UserStatesMapModel $statesMap): \Generator

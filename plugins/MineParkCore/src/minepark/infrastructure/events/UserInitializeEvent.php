@@ -10,27 +10,18 @@ use SOFe\AwaitGenerator\Mutex;
 /**
  * NOTE: Event is called after setting profile in UserStatesMapModel.
  */
-class UserInitializeEvent extends Event
+class UserInitializeEvent extends AsyncUserEvent
 {
     public function __construct(
-        private Player $player,
-        private UserStatesMapModel $statesMap,
-        private Mutex $initializationMutex
+        private Player $user,
+        private UserStatesMapModel $statesMap
     )
-    {}
-
-    public function getPlayer(): Player
     {
-        return $this->player;
+        parent::__construct($this->user);
     }
 
     public function getStatesMap(): UserStatesMapModel
     {
         return $this->statesMap;
-    }
-
-    public function getInitializationMutex(): Mutex
-    {
-        return $this->initializationMutex;
     }
 }

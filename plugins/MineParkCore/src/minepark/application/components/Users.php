@@ -38,8 +38,8 @@ class Users extends BaseComponent
 
     public function onUserInitialize(UserInitializeEvent $event)
     {
-        Await::g2c($event->getInitializationMutex()->run($this->userStatisticsService->initializeUser($event->getPlayer(), $event->getStatesMap())));
-        Await::g2c($event->getInitializationMutex()->run($this->userPrivilegesService->initializeUser($event->getPlayer(), $event->getStatesMap())));
+        $event->addToQueue($this->userStatisticsService->initializeUser($event->getUser(), $event->getStatesMap()));
+        $event->addToQueue($this->userPrivilegesService->initializeUser($event->getUser(), $event->getStatesMap()));
     }
 
     public function onPlayerQuit(PlayerQuitEvent $event)
@@ -50,7 +50,7 @@ class Users extends BaseComponent
 
     public function onUserQuit(UserQuitEvent $event)
     {
-        Await::g2c($event->getMutex()->run($this->userStatisticsService->onUserQuit($event->getPlayer(), $event->getStatesMap())));
+        $event->addToQueue($this->userStatisticsService->onUserQuit($event->getUser(), $event->getStatesMap()));
     }
 
     public function onCommand(CommandEvent $event)

@@ -7,5 +7,5 @@ main: minepark\plugin\MainPlugin
 permissions:
   minepark.command.default:
     default: true
-  minepark.command.setrank:
+  minepark.command.privileges:
     default: op

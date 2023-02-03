@@ -19,6 +19,7 @@ use pocketmine\utils\TextFormat;
 use SOFe\AwaitGenerator\Await;
 use SOFe\AwaitGenerator\GeneratorUtil;
 use SOFe\AwaitGenerator\Mutex;
+use SOFe\AwaitStd\AwaitStd;
 
 class UsersService extends BaseService
 {
@@ -33,71 +34,65 @@ class UsersService extends BaseService
     {
     }
 
-    public function initializeUser(Player $player): Generator
+    public function initializeUser(Player $user): Generator
     {
         if (!$this->mainPlugin->isInitialized()) {
-            $player->kick("Сервер еще не инициализирован. Попробуйте зайти позже");
+            $user->kick("Сервер еще не инициализирован. Попробуйте зайти позже");
             return;
         }
 
-        $player->setImmobile();
-        $player->setDisplayName("");
+        $user->setImmobile();
+        $user->setDisplayName("");
 
-        $statesMap = new UserStatesMapModel;
+        $mutex = new Mutex;
 
-        $statesMap->isNew = false;
-        $statesMap->user = $player;
+        $this->userStatesMapStore->setUser($user, $mutex);
 
-        /**
-         * @var ClientResponse<User> $response
-         */
-        $response = yield from $this->usersDataService->getByXuid($player->getXuid());
+        yield from $mutex->runClosure(function() use($user): Generator {
+            $statesMap = new UserStatesMapModel;
 
-        if (!$response->isSuccess()) {
-            $response = yield from $this->tryCreatingUser($player);
-            $statesMap->isNew = true;
-        }
+            $statesMap->isNew = false;
+            $statesMap->user = $user;
 
-        $statesMap->profile = $response->getBody();
+            /**
+             * @var ClientResponse<User> $response
+             */
+            $response = yield from $this->usersDataService->getByXuid($user->getXuid());
 
-        $initializationMutex = new Mutex;
+            if (!$response->isSuccess()) {
+                $response = yield from $this->tryCreatingUser($user);
+                $statesMap->isNew = true;
+            }
 
-        $event = new UserInitializeEvent($player, $statesMap, $initializationMutex);
-        $event->call();
+            $statesMap->profile = $response->getBody();
 
-        Await::g2c($initializationMutex->runClosure(function() use($player, $statesMap) : Generator {
-            $this->userStatesMapStore->setForUser($player, $statesMap);
-            return GeneratorUtil::empty();
-        }));
+            $event = new UserInitializeEvent($user, $statesMap);
+            $event->call();
 
-        Await::g2c($initializationMutex->run($this->onPostInitialize($player)));
+            yield from $event->awaitForFinish();
+
+            $this->userStatesMapStore->setUser($user, $statesMap);
+
+            yield from $this->onPostInitialize($user);
+        });
     }
 
     public function onUserQuit(Player $user): Generator
     {
-        $userInfo = $this->userStatesMapStore->getForUser($user);
+        $userInfo = yield from $this->userStatesMapStore->getUserAsync($user);
 
-        if (is_null($userInfo)) {
-            return GeneratorUtil::empty();
-        }
-
-        $mutex = new Mutex();
-
-        $event = new UserQuitEvent($user, $userInfo, $mutex);
+        $event = new UserQuitEvent($user, $userInfo);
         $event->call();
 
-        Await::g2c($mutex->runClosure(function() use($user, $userInfo) : Generator {
-            $this->userStatesMapStore->removeForUser($user);
-            $this->mainPlugin->getServer()->broadcastMessage(TextFormat::DARK_RED . $userInfo->profile->name . TextFormat::GRAY . " вышел из сервера");
-            yield from GeneratorUtil::empty();
-        }));
+        yield from $event->awaitForFinish();
 
-        return GeneratorUtil::empty();
+        $this->userStatesMapStore->removeUser($user);
+        $this->mainPlugin->getServer()->broadcastMessage(TextFormat::DARK_RED . $userInfo->profile->name . TextFormat::GRAY . " вышел из сервера");
     }
 
-    public function changeUserEmail(Player $player, string $newEmail): Generator
+    public function changeUserEmail(Player $user, string $newEmail): Generator
     {
-        $userInfo = $this->userStatesMapStore->getForUser($player);
+        $userInfo = $this->userStatesMapStore->getUser($user);
 
         if (is_null($userInfo)) {
             throw new \RuntimeException("Attempt to change email for uninitialized user");
@@ -112,10 +107,48 @@ class UsersService extends BaseService
 
         if ($response->isSuccess()) {
             $userInfo->profile->email = $newEmail;
-            $this->sendMessage($player, TextFormat::GREEN . "Ваша почта успешно сменена на " . TextFormat::AQUA . $newEmail . TextFormat::GREEN . "!");
+            $this->sendMessage($user, TextFormat::GREEN . "Ваша почта успешно сменена на " . TextFormat::AQUA . $newEmail . TextFormat::GREEN . "!");
         }
 
         return $response;
+    }
+
+    public function changeUserPrivilege(int $userId, string $privilege): Generator
+    {
+        /**
+         * @var ClientResponse<User> $response
+         */
+        $response = yield from $this->usersDataService->getById($userId);
+
+        if (!$response->isSuccess()) {
+            return false;
+        }
+
+        $userInfo = $response->getBody();
+
+        if ($userInfo->privilege === $privilege) {
+            return false;
+        }
+
+        /**
+         * @var ClientResponse $response
+         */
+        $response = yield from $this->usersDataService->setPrivilege($userId, $privilege);
+
+        if (!$response->isSuccess()) {
+            return false;
+        }
+
+        $userData = $this->userStatesMapStore->findById($userId);
+
+        if ($userData === null) {
+            return true;
+        }
+
+        $this->sendMessage($userData->user, TextFormat::AQUA . "Ваша привилегия изменена на '" . TextFormat::YELLOW . $privilege . TextFormat::AQUA . "'");
+        $this->sendMessage($userData->user, TextFormat::AQUA . "Для того, чтобы изменения применились, перезайдите в игру");
+
+        return true;
     }
 
     private function tryCreatingUser(Player $player): Generator
@@ -137,33 +170,41 @@ class UsersService extends BaseService
         return $response;
     }
 
-    private function onPostInitialize(Player $player): Generator
+    private function onPostInitialize(Player $user): Generator
     {
-        $userName = $this->userStatesMapStore->getForUser($player)->profile->name;
-        $isNew = $this->userStatesMapStore->getForUser($player)->isNew;
+        if (!$user->isOnline()) {
+            return yield from GeneratorUtil::empty();
+        }
 
-        $player->sendTitle(TextFormat::YELLOW . "Сервер " . ServerConstants::SERVER_NAME, TextFormat::YELLOW . "Добро пожаловать, " . TextFormat::AQUA . $userName . "!");
-        $player->setImmobile(false);
-        $player->setDisplayName($userName);
-        $player->setNameTag($userName);
+        $userData = $this->userStatesMapStore->getUser($user);
 
-        $this->sendMessage($player, TextFormat::AQUA . "Добро пожаловать на сервер " . ServerConstants::SERVER_NAME);
-        $this->sendMessage($player, TextFormat::AQUA . "Мы рады вас видеть, " . TextFormat::YELLOW . $userName . TextFormat::AQUA . "!");
-        $this->sendMessage($player, TextFormat::AQUA . "Наша группа ВКонтакте: " . TextFormat::YELLOW . ServerConstants::VK_PAGE);
-        $this->sendMessage($player, TextFormat::AQUA . "Наш сайт: " . TextFormat::YELLOW . ServerConstants::SERVER_WEBSITE);
+        $userId = $userData->profile->id;
+        $userName = $userData->profile->name;
+        $isNew = $userData->isNew;
+
+        $user->sendTitle(TextFormat::YELLOW . "Сервер " . ServerConstants::SERVER_NAME, TextFormat::YELLOW . "Добро пожаловать, " . TextFormat::AQUA . $userName . "!");
+        $user->setImmobile(false);
+        $user->setDisplayName($userName);
+        $user->setNameTag($userName);
+
+        $this->sendMessage($user, TextFormat::AQUA . "Добро пожаловать на сервер " . ServerConstants::SERVER_NAME);
+        $this->sendMessage($user, TextFormat::AQUA . "Мы рады вас видеть, " . TextFormat::YELLOW . $userName . TextFormat::AQUA . "!");
+        $this->sendMessage($user, TextFormat::AQUA . "Наша группа ВКонтакте: " . TextFormat::YELLOW . ServerConstants::VK_PAGE);
+        $this->sendMessage($user, TextFormat::AQUA . "Наш сайт: " . TextFormat::YELLOW . ServerConstants::SERVER_WEBSITE);
 
         if ($isNew) {
-            $this->sendMessage($player, TextFormat::AQUA . "Судя по всему, вы здесь " . TextFormat::YELLOW . "новый");
+            $this->sendMessage($user, TextFormat::AQUA . "Судя по всему, вы здесь " . TextFormat::YELLOW . "новый");
         }
 
         $this->mainPlugin->getServer()->broadcastMessage(TextFormat::DARK_RED . $userName . TextFormat::GRAY . " зашел на сервер");
+        $this->mainPlugin->getLogger()->notice("У пользователя " . $userName . "(IGN: " . $user->getName() . ") ID - $userId");
 
         return yield from GeneratorUtil::empty();
     }
 
-    private function sendMessage(Player $player, string $message)
+    private function sendMessage(Player $user, string $message)
     {
         // « » ‹ ›
-        $player->sendMessage(TextFormat::GOLD . TextFormat::BOLD . " Пользователи » " . TextFormat::RESET . $message);
+        $user->sendMessage(TextFormat::GOLD . TextFormat::BOLD . " Пользователи » " . TextFormat::RESET . $message);
     }
 }

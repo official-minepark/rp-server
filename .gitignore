@@ -9,10 +9,9 @@ Thumbs.db
 /players/*
 /crashdumps/*
 /bin/php/*
-/core_data/mdc.yml
 /backups/*
 /plugin_data/BuilderTools/sessions/*
-
+/plugin_data/MineParkCore/mdc.yml
 plugin_list.yml
 server.lock
 server.properties

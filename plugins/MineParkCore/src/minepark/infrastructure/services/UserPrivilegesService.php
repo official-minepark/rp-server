@@ -9,6 +9,7 @@ use minepark\infrastructure\models\UserStatesMapModel;
 use minepark\plugin\MainPlugin;
 use pocketmine\player\Player;
 use pocketmine\utils\TextFormat;
+use SOFe\AwaitStd\AwaitStd;
 
 class UserPrivilegesService extends BaseService
 {
@@ -35,8 +36,6 @@ class UserPrivilegesService extends BaseService
         $response = yield from $this->userPrivilegesDataService->calculatePermissions($privilegeName);
 
         $this->addPermissions($user, $response->getBody(), $statesMap);
-
-        $this->sendMessage($user, TextFormat::AQUA . "Ваша привилегия - " . TextFormat::YELLOW . $statesMap->privilege->displayName);
     }
 
     private function addPermissions(Player $user, array $permissions, UserStatesMapModel $statesMap): void

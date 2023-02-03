@@ -23,7 +23,7 @@ class ServerCommands implements Singleton, FromContext
         Server $server,
         commands\info\VersionServerCommand $version,
         commands\users\MenuServerCommand $menu,
-        commands\users\SetRankServerCommand $setRank
+        commands\users\PrivilegesServerCommand $setRank
     ): self
     {
         return new self(
