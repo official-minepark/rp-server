@@ -4,6 +4,7 @@ namespace minepark\application;
 
 use minepark\application\servercommands as commands;
 
+use minepark\common\di\Context;
 use minepark\common\di\interfaces\FromContext;
 use minepark\common\di\interfaces\Singleton;
 use minepark\common\di\traits\SingletonArgsTrait;
@@ -13,6 +14,7 @@ use pocketmine\command\utils\CommandStringHelper;
 use pocketmine\event\server\CommandEvent;
 use pocketmine\player\Player;
 use pocketmine\Server;
+use SOFe\AwaitGenerator\Await;
 
 class ServerCommands implements Singleton, FromContext
 {
@@ -20,45 +22,47 @@ class ServerCommands implements Singleton, FromContext
     use SingletonArgsTrait;
 
     public static function fromSingletonArgs(
-        Server $server,
-        commands\info\VersionServerCommand $version,
-        commands\users\MenuServerCommand $menu,
-        commands\users\PrivilegesServerCommand $setRank
+        Context $context
     ): self
     {
         return new self(
-            $server,
+            $context,
             [
-                $version,
-                $menu,
-                $setRank
+                commands\info\VersionServerCommand::class,
+                commands\users\MenuServerCommand::class,
+                commands\users\PrivilegesServerCommand::class
             ]
         );
     }
 
     private function __construct(
-        private Server $server,
+        private Context $context,
         private array $commands
     )
     {
-        $this->initializeCommands();
+        Await::g2c($this->initializeCommands($this->context, $this->commands));
     }
 
-    private function initializeCommands(): void
+    private function initializeCommands(Context $context, array $commands): \Generator
     {
-        foreach ($this->commands as $command) {
-            foreach ($command->getCommandName() as $name) {
-                $commandExisting = $this->server->getCommandMap()->getCommand($name);
+        $plugin = yield from MainPlugin::getInstance($context);
+        $server = $plugin->getServer();
+
+        foreach ($commands as $command) {
+            $commandInstance = yield from $command::getInstance($context);
+
+            foreach ($commandInstance->getCommandName() as $name) {
+                $commandExisting = $server->getCommandMap()->getCommand($name);
 
                 if (is_null($commandExisting)) {
                     continue;
                 }
 
-                $this->server->getCommandMap()->unregister($commandExisting);
-                $commandExisting->unregister($this->server->getCommandMap());
+                $server->getCommandMap()->unregister($commandExisting);
+                $commandExisting->unregister($server->getCommandMap());
             }
 
-            $this->server->getCommandMap()->register("minepark", $command);
+            $server->getCommandMap()->register("minepark", $commandInstance);
         }
     }
 }

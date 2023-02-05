@@ -5,6 +5,8 @@ api: 4.0.0
 main: minepark\plugin\MainPlugin
 
 permissions:
+  minepark.modifymap:
+    default: op
   minepark.command.default:
     default: true
   minepark.command.privileges:

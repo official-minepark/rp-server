@@ -57,7 +57,7 @@ class UsersService extends BaseService
             /**
              * @var ClientResponse<User> $response
              */
-            $response = yield from $this->usersDataService->getByXuid($user->getXuid());
+            $response = yield from $this->usersDataService->getByXuid($user->getXuid() === "" ? $user->getUniqueId()->serialize() : $user->getXuid());
 
             if (!$response->isSuccess()) {
                 $response = yield from $this->tryCreatingUser($user);
@@ -161,7 +161,7 @@ class UsersService extends BaseService
         /**
          * @var ClientResponse<User> $response
          */
-        $response = yield from $this->usersDataService->create($createMenuResponse->getName(), $player->getXuid(), $createMenuResponse->getEmail());
+        $response = yield from $this->usersDataService->create($createMenuResponse->getName(), $player->getXuid() === "" ? $player->getUniqueId()->serialize() : $player->getXuid(), $createMenuResponse->getEmail());
 
         if (!$response->isSuccess()) {
             return yield from $this->tryCreatingUser($player);
